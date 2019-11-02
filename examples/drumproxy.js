@@ -11,6 +11,43 @@ var proxy = Proxy();
 let isRunning = false
 const paddingCtx = []
 
+function getUrl(ctx) {
+  let requestUrl = 'http://'
+  if (ctx.proxyToServerRequestOptions.port === 443) {
+    requestUrl = 'https://'
+  }
+  requestUrl = `${requestUrl}${ctx.proxyToServerRequestOptions.host}${ctx.proxyToServerRequestOptions.path}`
+  const url = requestUrl
+  // console.log(`the request url is ${url}`)
+  return url
+}
+
+function upperHeader(theHeaders) {
+  const result = {}
+  for(const key of Object.keys(theHeaders)) {
+    console.log(key)
+    const items = key.split('-')
+    const newKey = items.map(x => {
+      return x.charAt(0).toUpperCase() + x.substring(1)
+    }).join('-')
+    result[newKey] = theHeaders[key]
+  }
+  return result
+}
+
+function isValidHost(ctx) {
+  const url = getUrl(ctx)
+  const invalidHosts = ['google' , 'youtube' , 'gmail', 'gstatic']
+  for (const x of invalidHosts) {
+    if (url.includes(x)) {
+      // return false
+      return true
+    }
+  }
+  // console.log(`=======\nbegin to request ${url}\n ==========`)
+  return true
+}
+
 proxy.onError(function (ctx, err, errorKind) {
   // ctx may be null
   var url = (ctx && ctx.clientToProxyRequest) ? ctx.clientToProxyRequest.url : '';
@@ -19,12 +56,14 @@ proxy.onError(function (ctx, err, errorKind) {
 
 
 proxy.onRequest(function (ctx, callback) {
-  console.log('onRequest!!!!')
+  // console.log('onRequest!!!!')
+  if (isValidHost(ctx)) {
   if (isRunning) {
     ctx.clientToProxyRequest.pause()
     paddingCtx.push(ctx)
   } else {
     execCtx(ctx)
+  }
   }
   callback();
 });
@@ -41,8 +80,8 @@ function execCtx(ctx) {
     let chunks = Buffer.alloc(0)
 
     ctx.clientToProxyRequest.on('data', (d) => {
-      console.log(d)
-      console.log('onData')
+      // console.log(d)
+      // console.log('onData')
       chunks = Buffer.concat([chunks, d])
       if (chunks.length >= contentLength) {
         proxyRun(ctx, chunks)
@@ -53,11 +92,14 @@ function execCtx(ctx) {
 }
 
 function proxyRunFinish(ctx) {
+  console.log(`\t\t finished ${getUrl(ctx)}`)
+  setTimeout(() => {
   isRunning = false
-  let nextCtx
-  while(nextCtx = paddingCtx.shift()) {
+  const nextCtx = paddingCtx.shift()
+  if (nextCtx) {
     proxyRun(nextCtx)
   }
+  } , 0)
 }
 
 function proxyRun(ctx , body) {
@@ -72,7 +114,11 @@ function proxyRun(ctx , body) {
   delete myheader['content-length']
 
   client = new DrumstickClient({ host: process.env.DC_HOST, port: process.env.DC_PORT }, process.env.DC_KEY);
-  console.log(`begin to request ${requestUrl}`)
+  // console.log(`begin to request ${requestUrl}`)
+  // console.log(ctx.proxyToServerRequestOptions.method)
+  // myheader = upperHeader(myheader)
+  // console.log(myheader)
+  // console.log(body)
   return client.ensureRequestV2(
       requestUrl,
       ctx.proxyToServerRequestOptions.method,
