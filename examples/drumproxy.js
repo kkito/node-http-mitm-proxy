@@ -1,8 +1,6 @@
 'use strict';
 const { ProxyGroup }  = require('../lib/proxy_group')
 
-const { DrumstickClient } = require("@kkito/drumstick");
-let client = new DrumstickClient({ host: process.env.DC_HOST, port: process.env.DC_PORT }, process.env.DC_KEY);
 const proxyGroup = new ProxyGroup()
 
 var port = 8082;
@@ -135,7 +133,7 @@ function proxyRun(client, ctx , body) {
       // client.ensureRequest(requestUrl,ctx.proxyToServerRequestOptions.headers, 'binary', {body: chunks})
       .then(res => {
         console.log(`on response ${requestUrl}: ${res.status}`)
-        client.close()
+        // client.close()
         if (res.headers['connection']) {
           res.headers['connection'] = 'keep-alive, close'
         }
