@@ -8,7 +8,6 @@ var port = 8082;
 var Proxy = require('../');
 var proxy = Proxy();
 
-let isRunning = false
 const paddingCtx = []
 
 function getUrl(ctx) {
@@ -40,8 +39,8 @@ function isValidHost(ctx) {
   const invalidHosts = ['google' , 'youtube' , 'gmail', 'gstatic']
   for (const x of invalidHosts) {
     if (url.includes(x)) {
-      return false
-      // return true
+      // return false
+      return true
     }
   }
   // console.log(`=======\nbegin to request ${url}\n ==========`)
@@ -95,7 +94,6 @@ function execCtx(client, ctx) {
 function proxyRunFinish(ctx) {
   console.log(`\t\t finished ${getUrl(ctx)}`)
   setTimeout(() => {
-    isRunning = false
     const proxyClient = proxyGroup.getInstance()
     if (proxyClient) {
       const nextCtx = paddingCtx.shift()
@@ -108,7 +106,6 @@ function proxyRunFinish(ctx) {
 }
 
 function proxyRun(client, ctx , body) {
-  isRunning = true
   let requestUrl = 'http://'
   if (ctx.proxyToServerRequestOptions.port === 443) {
     requestUrl = 'https://'
@@ -124,6 +121,7 @@ function proxyRun(client, ctx , body) {
   // myheader = upperHeader(myheader)
   // console.log(myheader)
   // console.log(body)
+  // console.log(body.toString())
   return client.request(
       requestUrl,
       ctx.proxyToServerRequestOptions.method,
