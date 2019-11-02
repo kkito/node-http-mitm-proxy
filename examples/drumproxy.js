@@ -142,8 +142,10 @@ function proxyRun(client, ctx , body) {
       })
       .catch(err => {
         client.close()
-        console.log(`error happended ${err} ${typeof err}`)
+        console.log(`error happended for catch ${err} ${typeof err}`)
         ctx.proxyToClientResponse.writeHead(502)
+        ctx.proxyToClientResponse.write(`error ${err}`)
+        ctx.proxyToClientResponse.end()
         proxyRunFinish(ctx)
       })
 }
