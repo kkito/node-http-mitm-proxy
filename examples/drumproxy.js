@@ -1,7 +1,9 @@
 'use strict';
+const { ProxyGroup }  = require('../lib/proxy_group')
 
 const { DrumstickClient } = require("@kkito/drumstick");
 let client = new DrumstickClient({ host: process.env.DC_HOST, port: process.env.DC_PORT }, process.env.DC_KEY);
+const proxyGroup = new ProxyGroup()
 
 var port = 8082;
 
@@ -40,8 +42,8 @@ function isValidHost(ctx) {
   const invalidHosts = ['google' , 'youtube' , 'gmail', 'gstatic']
   for (const x of invalidHosts) {
     if (url.includes(x)) {
-      // return false
-      return true
+      return false
+      // return true
     }
   }
   // console.log(`=======\nbegin to request ${url}\n ==========`)
@@ -58,23 +60,24 @@ proxy.onError(function (ctx, err, errorKind) {
 proxy.onRequest(function (ctx, callback) {
   // console.log('onRequest!!!!')
   if (isValidHost(ctx)) {
-  if (isRunning) {
-    ctx.clientToProxyRequest.pause()
-    paddingCtx.push(ctx)
-  } else {
-    execCtx(ctx)
-  }
+    const proxyClient = proxyGroup.getInstance()
+    if (proxyClient) {
+      execCtx(proxyClient, ctx, proxyClient)
+    } else {
+      ctx.clientToProxyRequest.pause()
+      paddingCtx.push(ctx)
+    }
   }
   callback();
 });
 
-function execCtx(ctx) {
+function execCtx(client, ctx) {
 
   ctx.clientToProxyRequest.resume();
   const contentLengthHeadher = ctx.proxyToServerRequestOptions.headers['content-length']
   let contentLength = 0
   if (!contentLengthHeadher) {
-    proxyRun(ctx, null)
+    proxyRun(client,ctx, null)
   } else {
     contentLength = parseInt(contentLengthHeadher, 10)
     let chunks = Buffer.alloc(0)
@@ -84,7 +87,7 @@ function execCtx(ctx) {
       // console.log('onData')
       chunks = Buffer.concat([chunks, d])
       if (chunks.length >= contentLength) {
-        proxyRun(ctx, chunks)
+        proxyRun(client, ctx, chunks)
       }
     })
   }
@@ -94,15 +97,19 @@ function execCtx(ctx) {
 function proxyRunFinish(ctx) {
   console.log(`\t\t finished ${getUrl(ctx)}`)
   setTimeout(() => {
-  isRunning = false
-  const nextCtx = paddingCtx.shift()
-  if (nextCtx) {
-    proxyRun(nextCtx)
-  }
+    isRunning = false
+    const proxyClient = proxyGroup.getInstance()
+    if (proxyClient) {
+      const nextCtx = paddingCtx.shift()
+      if (nextCtx) {
+        proxyRun(proxyClient, nextCtx)
+      }
+
+    }
   } , 0)
 }
 
-function proxyRun(ctx , body) {
+function proxyRun(client, ctx , body) {
   isRunning = true
   let requestUrl = 'http://'
   if (ctx.proxyToServerRequestOptions.port === 443) {
@@ -113,17 +120,17 @@ function proxyRun(ctx , body) {
   let myheader = ctx.proxyToServerRequestOptions.headers
   delete myheader['content-length']
 
-  client = new DrumstickClient({ host: process.env.DC_HOST, port: process.env.DC_PORT }, process.env.DC_KEY);
+  // client = new DrumstickClient({ host: process.env.DC_HOST, port: process.env.DC_PORT }, process.env.DC_KEY);
   // console.log(`begin to request ${requestUrl}`)
   // console.log(ctx.proxyToServerRequestOptions.method)
   // myheader = upperHeader(myheader)
   // console.log(myheader)
   // console.log(body)
-  return client.ensureRequestV2(
+  return client.request(
       requestUrl,
       ctx.proxyToServerRequestOptions.method,
       myheader,
-      body, {}
+      body
     )
       // client.ensureRequest(requestUrl,ctx.proxyToServerRequestOptions.headers, 'binary', {body: chunks})
       .then(res => {
