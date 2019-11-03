@@ -1,5 +1,7 @@
 'use strict';
-const { ProxyGroup }  = require('../lib/proxy_group')
+const { ProxyGroup } = require('../lib/proxy_group')
+const { BlockUrl } = require('../lib/block_url')
+const { HttpUtil } = require("@kkito/drumstick");
 
 const proxyGroup = new ProxyGroup()
 
@@ -21,9 +23,13 @@ function getUrl(ctx) {
   return url
 }
 
+function isBlockHost(ctx) {
+  return BlockUrl.checkHostBlocked(ctx.proxyToServerRequestOptions.host)
+}
+
 function upperHeader(theHeaders) {
   const result = {}
-  for(const key of Object.keys(theHeaders)) {
+  for (const key of Object.keys(theHeaders)) {
     console.log(key)
     const items = key.split('-')
     const newKey = items.map(x => {
@@ -36,7 +42,7 @@ function upperHeader(theHeaders) {
 
 function isValidHost(ctx) {
   const url = getUrl(ctx)
-  const invalidHosts = ['google' , 'youtube' , 'gmail', 'gstatic']
+  const invalidHosts = ['google', 'youtube', 'gmail', 'gstatic']
   for (const x of invalidHosts) {
     if (url.includes(x)) {
       // return false
@@ -56,14 +62,17 @@ proxy.onError(function (ctx, err, errorKind) {
 
 proxy.onRequest(function (ctx, callback) {
   // console.log('onRequest!!!!')
-  if (isValidHost(ctx)) {
+  if (isBlockHost(ctx)) {
     const proxyClient = proxyGroup.getInstance()
     if (proxyClient) {
-      execCtx(proxyClient, ctx, proxyClient)
+      execCtx(proxyClient, ctx)
     } else {
       ctx.clientToProxyRequest.pause()
       paddingCtx.push(ctx)
     }
+
+  } else {
+    execCtx(null, ctx)
   }
   callback();
 });
@@ -74,7 +83,7 @@ function execCtx(client, ctx) {
   const contentLengthHeadher = ctx.proxyToServerRequestOptions.headers['content-length']
   let contentLength = 0
   if (!contentLengthHeadher) {
-    proxyRun(client,ctx, null)
+    proxyRun(client, ctx, null)
   } else {
     contentLength = parseInt(contentLengthHeadher, 10)
     let chunks = Buffer.alloc(0)
@@ -92,7 +101,9 @@ function execCtx(client, ctx) {
 }
 
 function proxyRunFinish(ctx) {
-  console.log(`\t\t finished ${getUrl(ctx)}`)
+  if (isBlockHost(ctx)){
+    console.log(`\t\t finished ${getUrl(ctx)}`)
+  }
   setTimeout(() => {
     const proxyClient = proxyGroup.getInstance()
     if (proxyClient) {
@@ -102,10 +113,10 @@ function proxyRunFinish(ctx) {
       }
 
     }
-  } , 0)
+  }, 0)
 }
 
-function proxyRun(client, ctx , body) {
+function proxyRun(client, ctx, body) {
   let requestUrl = 'http://'
   if (ctx.proxyToServerRequestOptions.port === 443) {
     requestUrl = 'https://'
@@ -122,7 +133,31 @@ function proxyRun(client, ctx , body) {
   // console.log(myheader)
   // console.log(body)
   // console.log(body.toString())
-  return client.request(
+  if (!isBlockHost(ctx)) {
+    return HttpUtil.request(requestUrl,
+      ctx.proxyToServerRequestOptions.method,
+      myheader,
+      body
+    ).then(res => {
+      if (res.headers['connection']) {
+        res.headers['connection'] = 'keep-alive, close'
+      }
+      ctx.proxyToClientResponse.writeHead(res.status, res.headers)
+      ctx.proxyToClientResponse.write(res.body)
+      ctx.proxyToClientResponse.end()
+      proxyRunFinish(ctx)
+    })
+      .catch(err => {
+        console.log(`error happended for catch ${err} ${typeof err}`)
+        ctx.proxyToClientResponse.writeHead(502)
+        ctx.proxyToClientResponse.write(`error ${err}`)
+        ctx.proxyToClientResponse.end()
+        proxyRunFinish(ctx)
+      })
+
+  } else {
+
+    return client.request(
       requestUrl,
       ctx.proxyToServerRequestOptions.method,
       myheader,
@@ -148,6 +183,7 @@ function proxyRun(client, ctx , body) {
         ctx.proxyToClientResponse.end()
         proxyRunFinish(ctx)
       })
+  }
 }
 
 
