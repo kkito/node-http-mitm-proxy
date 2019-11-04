@@ -41,16 +41,7 @@ function upperHeader(theHeaders) {
 }
 
 function isValidHost(ctx) {
-  const url = getUrl(ctx)
-  const invalidHosts = ['google', 'youtube', 'gmail', 'gstatic']
-  for (const x of invalidHosts) {
-    if (url.includes(x)) {
-      // return false
-      return true
-    }
-  }
-  // console.log(`=======\nbegin to request ${url}\n ==========`)
-  return true
+  return !isBlockHost(ctx)
 }
 
 proxy.onError(function (ctx, err, errorKind) {
